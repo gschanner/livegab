@@ -9,7 +9,8 @@
 	const windowUtils = require("sdk/window/utils");
 	var buttons = require('sdk/ui/button/action');
 	var tabs = require("sdk/tabs");
-
+	var system = require("sdk/system");
+	var PLATFORM = system.platform || "";
 	var DEBUG = 1;
 
 	/*
@@ -86,14 +87,19 @@
 		let environment = Cc["@mozilla.org/process/environment;1"]
 	                            .getService(Ci.nsIEnvironment);
 		let path = environment.get("PATH");
-		let paths = path.split(":");
-
+		let paths = [];
+		if(PLATFORM === "winnt") {
+			paths = path.split(";");
+		}
+		else {
+			paths = path.split(":");
+		}
 		for(let i = 0; i < paths.length; i++) {
-			let iterator = new OS.File.DirectoryIterator(paths[i]);
+			let iterator= new OS.File.DirectoryIterator(paths[i]);
 			let entries = [];
 			iterator.forEach(
 				function onEntry(entry) {
-					if(entry.name==="livestreamer"){
+					if(entry.name==="livestreamer" || entry.name === "livestreamer.exe"){
 						if(DEBUG === 1){
 							console.log("Found livestreamer!:\n");
 							console.log(entry);
@@ -105,6 +111,7 @@
 			if(livestreamerPath !== "")
 				break;
 			if(DEBUG === 1){
+				console.log(paths[i]);
 				console.log(i+"/"+paths.length+"fin");
 			}
 		}
