@@ -1,30 +1,38 @@
+/*
+	GLOBAL CONSTS/IMPORTS
+*/
 const {Cc,Ci, Cu} = require("chrome");
 Cu.import("resource://gre/modules/Promise.jsm");
 const {TextEncoder, OS} = Cu.import("resource://gre/modules/osfile.jsm", {});
 const windowUtils = require("sdk/window/utils");
+var buttons = require('sdk/ui/button/action');
+var tabs = require("sdk/tabs");
 
-const processClosedNB = 'process-notification';
+/*
+	Notificaiton ids
+*/
+const PROCESS_CLOSED = 'process-notification';
+const LIVESTREAMER_PATH_NOT_FOUND = 'path-notification';
+const CLOSING_LIVESTREAMER = 'close-livestreamer';
+const OPENING_LIVESTREAMER = 'open-livestreamer';
+const NOTIFICATION_FADE_DELAY = 3000;
+
+/*
+	GLOBALS 
+*/
 var nb;
 var priority;
 var gBrowser;
-
-var buttons = require('sdk/ui/button/action');
-var tabs = require("sdk/tabs");
 var livestreamerPath = "";
+var running = {};
 
-//window.addEventListener("load", function() { 
-
-	
-	//var n = nb.getNotificationWithValue(processClosedNB);
-//}, false);
+function init(){
+	findLivestreamerPath();
+}
 
 function myExt(path) {this.path = path;}
 myExt.prototype = {
   observe: function(aSubject, aTopic, aData) {
-  	gBrowser = windowUtils.getMostRecentBrowserWindow().getBrowser();
-
-	nb = gBrowser.getNotificationBox();
-	priority = nb.PRIORITY_INFO_MEDIUM;
   	console.log("observed "+this.path);
   	console.log(aSubject);
   	console.log(aTopic);
@@ -34,41 +42,14 @@ myExt.prototype = {
   		message = "livestreamer ("+this.path+") closed successfully!";
   	else
   		message = "livestreamer ("+this.path+") failed to start!";
-
-  	nb.appendNotification(message, processClosedNB,
-                         'chrome://browser/skin/Info.png',
-                          priority, null);
-  	
-  	/*
-    switch (aTopic) {
-      case "quit-application":
-        stopServer();
-        obs.removeObserver(this, "quit-application");
-        break;
-      case "profile-after-change":
-        startServer();
-        obs.addObserver(this, "quit-application", false);
-        break;
-    }
-    */
+  	removeRunningProcess(this.path);
+  	displayNotification(PROCESS_CLOSED, message);
   }
 };
 
-/*
-onStateChange: function(aWebProgress, aRequest, aFlag, aStatus)
-{
-  if ((aFlag & Ci.nsIWebProgressListener.STATE_STOP) &&
-      (aFlag & Ci.nsIWebProgressListener.STATE_IS_WINDOW))
-  {
-    // A window finished loading
-    doSomething(aWebProgress.DOMWindow);
-  }
-}
-*/
-
 var button = buttons.ActionButton({
-  id: "mozilla-link",
-  label: "Visit Mozilla",
+  id: "open-livestreamer",
+  label: "Open livestreamer for this page",
   icon: {
     "16": "./icon-16.png",
     "32": "./icon-32.png",
@@ -77,100 +58,86 @@ var button = buttons.ActionButton({
   onClick: handleClick
 });
 
-var button2 = buttons.ActionButton({
-  id: "gab-link",
-  label: "HORSE",
-  icon: {
-    "16": "./icon-16.png",
-    "32": "./icon-32.png",
-    "64": "./icon-64.png"
-  },
-  onClick: handleClick
-});
+function displayNotification(id, message){
+	gBrowser = windowUtils.getMostRecentBrowserWindow().getBrowser();
+	nb = gBrowser.getNotificationBox();
+	priority = nb.PRIORITY_INFO_MEDIUM;
+  	let n = nb.getNotificationWithValue(id);
+	if(n) {
+	    n.label = message;
+	} else {
+		var not = nb.appendNotification(message, id,
+                         'chrome://browser/skin/Info.png',
+                          priority, null);
+		gBrowser.selectedBrowser.contentWindow.setTimeout(function(){
+			nb.removeNotification(not);
+		}, NOTIFICATION_FADE_DELAY);
 
-function handleClick(state) {
+	}
+}
+
+function findLivestreamerPath(){
 	let environment = Cc["@mozilla.org/process/environment;1"]
                             .getService(Ci.nsIEnvironment);
 	let path = environment.get("PATH");
 	let paths = path.split(":");
-	let promises = [];
 
 	for(let i = 0; i < paths.length; i++) {
 		let iterator = new OS.File.DirectoryIterator(paths[i]);
 		let entries = [];
-		promises[i] = iterator.forEach(
+		iterator.forEach(
 			function onEntry(entry) {
-				if(livestreamerPath !== ""){
-					Promise.reject(Error("Already found!"));				
-				}
 				if(entry.name==="livestreamer"){
 					console.log("Found livestreamer!:\n");
 					console.log(entry);
 					livestreamerPath = entry.path;	
-					Promise.resolve("Found Path!");
 				}
-					
-				/*
-				if ("winLastWriteDate" in entry) {
-				  // Under Windows, additional information allows us to sort files immediately
-				  // without having to perform additional I/O.
-				  entries.push({entry: entry, creationDate: entry.winCreationDate});
-				} else {
-				  // Under other OSes, we need to call OS.File.stat
-				  return OS.File.stat(entry.path).then(
-				    function onSuccess(info) {
-				      entries.push({entry:entry, creationDate: info.creationDate});
-				    }
-				  );
-				}*/
 			}
 		);
 		if(livestreamerPath !== "")
 			break;
 		console.log(i+"/"+paths.length+"fin");
-	}	
-	Promise.all(promises).then(function(arrayOfResults) {
-		console.log(arrayOfResults);
-		
-		let file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
-		file.initWithPath(livestreamerPath);				
-		let curUrl = windowUtils.getMostRecentBrowserWindow().getBrowser().selectedBrowser.contentWindow.location.href;
-		console.log("url"+curUrl);
-		//var params = ["http://www.twitch.tv/dota2ti_ru", "best"];
-		let params = [curUrl, "best"];
-		let process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
-
-		console.log("Starting: "+livestreamerPath+ "with "+params[0]);
-		process.init(file);
-		//process.run(false, params, params.length);
-		process.runAsync(params, params.length, new myExt(params[0]));
-		/*promise.then(
-			function onSuccess() {
-				console.log("Success!");
-				// Close the iterator, sort the array, return it
-				iterator.close();
-
-				var file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
-				file.initWithPath(livestreamerPath);				
-				var params = ["http://www.twitch.tv/dota2ti_ru"];
-				var process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
-
-				console.log("Starting: "+livestreamerPath+ "with "+params[0]);
-				process.init(file);
-				//process.run(false, params, params.length);
-				process.runAsync(params, params.length, new myExt());
-				/*
-				return entries.sort(function compare(a, b) {
-				  	return a.creationDate - b.creationDate;
-				});/
-			},
-			function onFailure(reason) {
-				console.log("Failure!");
-				 // Close the iterator, propagate any error
-				iterator.close();
-				throw reason;
-			}
-		);
-		*/
-	});
+	}
 }
+
+function removeRunningProcess(processURL){
+	console.log("removing url "+processURL);
+	try {
+		running[processURL].kill();
+	} catch(e){
+
+	}
+	delete running[processURL];
+	displayNotification(CLOSING_LIVESTREAMER, "Livestreamer closed!");
+}
+
+function handleClick(state) {
+	if(livestreamerPath === ""){
+		displayNotification(LIVESTREAMER_PATH_NOT_FOUND, "Livestreamer path not found (yet?)!");
+	} else {
+		let curUrl = windowUtils.getMostRecentBrowserWindow().getBrowser().selectedBrowser.contentWindow.location.href;
+		if(typeof running[curUrl] != "undefined"){
+			console.log("killing already open url "+curUrl)
+			removeRunningProcess(curUrl);
+		} else {
+			displayNotification(OPENING_LIVESTREAMER, "Opening URL in Livestreamer...");
+			let file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+			file.initWithPath(livestreamerPath);				
+			
+			console.log("url"+curUrl);
+			let params = [curUrl, "best"];
+			let process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
+
+			console.log("Starting: "+livestreamerPath+ "with "+curUrl);
+			process.init(file);
+			process.runAsync(params, params.length, new myExt(params[0]));	
+			running[curUrl] = process;
+			console.log("running info:");
+			console.log(running);
+			console.log(running[curUrl]);
+		}
+		
+	}
+}
+
+init();
