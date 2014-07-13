@@ -1,18 +1,44 @@
 const {Cc,Ci, Cu} = require("chrome");
 Cu.import("resource://gre/modules/Promise.jsm");
 const {TextEncoder, OS} = Cu.import("resource://gre/modules/osfile.jsm", {});
+const windowUtils = require("sdk/window/utils");
+
+const processClosedNB = 'process-notification';
+var nb;
+var priority;
+var gBrowser;
 
 var buttons = require('sdk/ui/button/action');
 var tabs = require("sdk/tabs");
 var livestreamerPath = "";
 
-function myExt() {}
+//window.addEventListener("load", function() { 
+
+	
+	//var n = nb.getNotificationWithValue(processClosedNB);
+//}, false);
+
+function myExt(path) {this.path = path;}
 myExt.prototype = {
   observe: function(aSubject, aTopic, aData) {
-  	console.log("observed");
+  	gBrowser = windowUtils.getMostRecentBrowserWindow().getBrowser();
+
+	nb = gBrowser.getNotificationBox();
+	priority = nb.PRIORITY_INFO_MEDIUM;
+  	console.log("observed "+this.path);
   	console.log(aSubject);
   	console.log(aTopic);
   	console.log(aData);
+  	let message = "";
+  	if(aSubject == {})
+  		message = "livestreamer ("+this.path+") closed successfully!";
+  	else
+  		message = "livestreamer ("+this.path+") failed to start!";
+
+  	nb.appendNotification(message, processClosedNB,
+                         'chrome://browser/skin/Info.png',
+                          priority, null);
+  	
   	/*
     switch (aTopic) {
       case "quit-application":
@@ -27,6 +53,19 @@ myExt.prototype = {
     */
   }
 };
+
+/*
+onStateChange: function(aWebProgress, aRequest, aFlag, aStatus)
+{
+  if ((aFlag & Ci.nsIWebProgressListener.STATE_STOP) &&
+      (aFlag & Ci.nsIWebProgressListener.STATE_IS_WINDOW))
+  {
+    // A window finished loading
+    doSomething(aWebProgress.DOMWindow);
+  }
+}
+*/
+
 var button = buttons.ActionButton({
   id: "mozilla-link",
   label: "Visit Mozilla",
@@ -93,15 +132,18 @@ function handleClick(state) {
 	Promise.all(promises).then(function(arrayOfResults) {
 		console.log(arrayOfResults);
 		
-		var file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+		let file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
 		file.initWithPath(livestreamerPath);				
-		var params = ["http://www.twitch.tv/dota2ti_ru"];
-		var process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
+		let curUrl = windowUtils.getMostRecentBrowserWindow().getBrowser().selectedBrowser.contentWindow.location.href;
+		console.log("url"+curUrl);
+		//var params = ["http://www.twitch.tv/dota2ti_ru", "best"];
+		let params = [curUrl, "best"];
+		let process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
 
 		console.log("Starting: "+livestreamerPath+ "with "+params[0]);
 		process.init(file);
 		//process.run(false, params, params.length);
-		process.runAsync(params, params.length, new myExt());
+		process.runAsync(params, params.length, new myExt(params[0]));
 		/*promise.then(
 			function onSuccess() {
 				console.log("Success!");
