@@ -2,7 +2,7 @@
   "name": "livegab",
   "title": "livegab",
   "id": "jid1-j2GuU5My2zkuMQ",
-  "description": "a basic add-on",
+  "description": "Simple firefox addon that tries to open livestreamer for the currently opened page.",
   "author": "",
   "license": "MPL 2.0",
   "version": "0.1"
