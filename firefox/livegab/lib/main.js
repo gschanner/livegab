@@ -50,7 +50,7 @@
     function init() {
         if(system.platform.toLowerCase() === "winnt"){
             livestreamerSearchString = "livestreamer.exe";
-            livestreamerPathEnvironment = ["PATH=" + environment.get("PATH")];
+            livestreamerPathEnvironment = ["PATH=" + environment.get("PATH"), "SystemRoot=" + environment.get("SystemRoot"),"APPDATA=" + environment.get("APPDATA")];
             pathDirectories = environment.get("PATH").split(";");
         } else {
             livestreamerSearchString = "livestreamer";
@@ -92,27 +92,26 @@
     }
 
     function displayQualityMenu(streams, url) {
-
-        if(streams && streams.length < 1) {
+        let menuid = "select-quality-menu";
+        let message = "select video quality";
+        let nbButtons = [];
+        let nb = windowUtils.getMostRecentBrowserWindow().getBrowser().getNotificationBox();
+        let priority = nb.PRIORITY_INFO_MEDIUM;
+        
+        let i = 1;
+        for (var qOption in streams) {
+            nbButtons.push({
+                "accessKey": i++,
+                "callback": function(not, desc) {
+                    openStream(url, desc.label);
+                },
+                "label": qOption,
+                "popup": null
+            });
+        }
+        if(nbButtons && nbButtons.length < 1) {
             displayNotification(NO_STREAMS_FOUND, 'No streams found for this page');
         } else {
-            let menuid = "select-quality-menu";
-            let message = "select video quality";
-            let nbButtons = [];
-            let nb = windowUtils.getMostRecentBrowserWindow().getBrowser().getNotificationBox();
-            let priority = nb.PRIORITY_INFO_MEDIUM;
-            
-            let i = 1;
-            for (var qOption in streams) {
-                nbButtons.push({
-                    "accessKey": i++,
-                    "callback": function(not, desc) {
-                        openStream(url, desc.label);
-                    },
-                    "label": qOption,
-                    "popup": null
-                });
-            }
             let n = nb.getNotificationWithValue(menuid);
             if (n) {
                 n.label = message;
